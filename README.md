@@ -5,7 +5,7 @@ A collection of Python utilities for
 - manipulation of DNA/RNA sequences 
 - FASTQ read filtering.
 - FASTA filtering
-- BLAST readingbioinformatic_tool/
+- BLAST protein sorting
 
 Author: Elina Iskhakova, *Institute of Cytology, Saint-Petersburg, Russia*
 
