@@ -1,7 +1,7 @@
 from modules.dna_rna_tools.py import (
     is_nucleic_acid, reverse, transcribe, complement, reverse_complement
     )
-from modules.fastq_tools.py import count_gc, count_quality
+from modules.fastq_tools.py import count_gc, count_quality, read_fastq, write_fastq
 
 
 def run_dna_rna_tools(*args: str) -> "bool | str":
@@ -55,10 +55,11 @@ def run_dna_rna_tools(*args: str) -> "bool | str":
 
 
 def filter_fastq(
-    seqs: dict,
+    input_fastq: str,
     gc_bounds: "tuple | int | float" = (0, 100),
     length_bounds: "tuple | int | float" = (0, 2**32),
-    quality_threshold: float = 0
+    quality_threshold: float = 0,
+    output_fastq: str = None
 ) -> dict:
     """
     Filters reads in fastq file, according to a number of
@@ -66,13 +67,16 @@ def filter_fastq(
     of a read.
 
     Arguments:
-    seqs: dict[str, tuple[str, str]]
+    input_fastq: str
     gc_bounds: tuple/int/float (default (0, 100))
     length_bounds: tuple/int/float (default (0, 2**32))
     quality_threshold: int/float (default 0)
+    output_fastq: str
 
-    Returns dict[str, tuple[str, str]]
+    Returns str
     """
+# Reads the fastq file
+    seqs = read_fastq(input_fastq)
 
 # Checks the gc_bounds type and defines the range of GC-bounds
     if isinstance(gc_bounds, (int, float)):
@@ -105,4 +109,5 @@ def filter_fastq(
         ):
             filtered_fastq[key] = (seq, qual)
 
-    return filtered_fastq
+# Writes the fastq file
+write_fastq(filtered_fastq)
