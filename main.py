@@ -42,9 +42,10 @@ def run_dna_rna_tools(*args: str) -> "bool | str":
         raise ValueError("Неизвестная процедура")
 
     #  Checks if the sequence is nucleic acid
-    for seq in sequences:
-        if tool != "is_nucleic_acid" and not is_nucleic_acid(seq):
-            raise ValueError("Введена некорректная последовательность")
+    if tool != "is_nucleic_acid":
+        for seq in sequences:
+            if not is_nucleic_acid(seq):
+                raise ValueError("Введена некорректная последовательность")
 
     #  Resuls of the fuction
     results = [tools[tool](seq) for seq in sequences]
