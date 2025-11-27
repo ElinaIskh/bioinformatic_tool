@@ -18,10 +18,10 @@ bioinformatic_tool/
 │
 ├── README.md
 ├── main.py                      # Main script (entry point)
-├── bio_files_processor.py       # Fasta and BLAST file utilities.py
+├── bio_files_processor.py       # Fasta and BLAST file utilities
 └── modules/
     ├── dna_rna_tools.py         # DNA/RNA sequence tools
-    └── fastq_tools.py           # FASTQ utilities (read/write, GC content, quality)
+    └── fastq_tools.py           # FASTQ processing and quality control
 
 ```
 
@@ -135,4 +135,8 @@ Contains:
 - `write_fastq(filtered_fastq, output_fastq)` — write FASTQ dictionary to file
 - `count_gc(seq)` — calculates GC percentage
 - `count_quality(qual)` — calculates mean quality score
+- Filtering helpers: `filter_by_gc()`, `filter_by_length()`, `filter_by_quality()`
+- `parse_bounds()` — validate and parse numeric bounds
+
+
 
