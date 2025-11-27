@@ -30,6 +30,35 @@ def count_quality(qual: str) -> float:
     return round(char_quality/len(qual), 2)
 
 
+def parse_bounds(bounds, name = "parameter"):
+    """
+    Parses bounds (tuple/int/float) and returns (min, max). Paramenter: GC or length.
+    Raises ValueError if bounds are invalid.
+    """
+    if isinstance(bounds, (int, float)):
+        return 0, bounds
+    elif isinstance(bounds, tuple) and len(bounds) == 2:
+        return bounds
+    else:
+        raise ValueError(f"Incorrect interval for {name}-bounds: {bounds}")
+
+
+def filter_by_gc(seq: str, min_gc: float, max_gc: float) -> bool:
+    """Checks if GC-content of the sequence is within the bounds."""
+    gc = count_gc(seq)
+    return min_gc <= gc <= max_gc
+
+
+def filter_by_length(seq: str, min_len: int, max_len: int) -> bool:
+    """Checks if sequence length is within the bounds."""
+    return min_len <= len(seq) <= max_len
+
+
+def filter_by_quality(qual: str, threshold: float) -> bool:
+    """Checks if mean quality exceeds the threshold."""
+    return count_quality(qual) > threshold
+
+
 def read_fastq(input_fastq: str) -> dict:
     """
     Reads the input fastq file and turns it into the dictionary:
@@ -41,7 +70,7 @@ def read_fastq(input_fastq: str) -> dict:
     Returns dict[str, tuple[str, str]]
     """
     seqs = {}
-    with open(input_fastq) as fastq_file:
+    with open(input_fastq, "r") as fastq_file:
         while True:
             id = fastq_file.readline()
             if not id:
