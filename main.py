@@ -1,14 +1,16 @@
-from modules.dna_rna_tools.py import (
+from .modules.dna_rna_tools import (
     is_nucleic_acid, reverse, transcribe, complement, reverse_complement
     )
-from modules.fastq_tools.py import count_gc, count_quality, read_fastq, write_fastq
+from .modules.fastq_tools import count_gc, count_quality, read_fastq, write_fastq
 
 
 def run_dna_rna_tools(*args: str) -> "bool | str":
     """
     Takes 1 or more sequences, checks if is it nucleic acid and
     does one of the tools: is_nucleic_acid, reverse, transcribe,
-    complement, reverse_complement
+    complement, reverse_complement.
+    This functions checks if there are at least 2 arguments, 
+    if the tool exists and if the sequence is nucleic acid.
 
     Arguments:
     sequences: list[str]
@@ -20,13 +22,12 @@ def run_dna_rna_tools(*args: str) -> "bool | str":
         Sequence is not an nucleic acid
         Tool is unknown
     """
-    # Checks if there are minimum 2 arguments
+
     if len(args) < 2:
         raise ValueError(
-            "Введите хотя бы одну последовательность и одну процедуру")
+            "Write at least one sequence and one tool")
 
-    sequences = args[:-1]
-    tool = args[-1]
+    *sequences, tool = args
 
     # Tools dictionary
     tools = {
@@ -37,17 +38,14 @@ def run_dna_rna_tools(*args: str) -> "bool | str":
         "reverse_complement": reverse_complement,
     }
 
-    # Checks if the tool exists
     if tool not in tools:
-        raise ValueError("Неизвестная процедура")
+        raise ValueError("Unknown tool")
 
-    #  Checks if the sequence is nucleic acid
     if tool != "is_nucleic_acid":
         for seq in sequences:
             if not is_nucleic_acid(seq):
-                raise ValueError("Введена некорректная последовательность")
+                raise ValueError("Incorrect sequence")
 
-    #  Resuls of the fuction
     results = [tools[tool](seq) for seq in sequences]
     if len(results) == 1:
         return results[0]
@@ -75,39 +73,24 @@ def filter_fastq(
 
     Returns str
     """
-# Reads the fastq file
+
     seqs = read_fastq(input_fastq)
 
-# Checks the gc_bounds type and defines the range of GC-bounds
-    if isinstance(gc_bounds, (int, float)):
-        min_gc = 0
-        max_gc = gc_bounds
-    elif isinstance(gc_bounds, tuple):
-        min_gc = gc_bounds[0]
-        max_gc = gc_bounds[1]
-    else:
-        raise ValueError("Incorrect interval for GC-bounds")
+    min_gc, max_gc = parse_bounds(gc_bounds, "GC")
+    min_len, max_len = parse_bounds(length_bounds, "length")
 
-# Checks the length_bounds type and defines the range of sequence's length
-    if isinstance(length_bounds, (int, float)):
-        min_length = 0
-        max_length = length_bounds
-    elif isinstance(length_bounds, tuple):
-        min_length = length_bounds[0]
-        max_length = length_bounds[1]
-    else:
-        raise ValueError("Incorrect interval for length")
-
-# Filters the reads by input parametrs
     filtered_fastq = {}
-    for key, value in seqs.items():
-        seq, qual = value
+    for key, (seq, qual) in seqs.items():
         if (
-            (min_gc <= count_gc(seq) <= max_gc)
-            and (min_length <= len(seq) <= max_length)
-            and count_quality(qual) > quality_threshold
+            filter_by_gc(seq, min_gc, max_gc)
+            and filter_by_length(seq, min_len, max_len)
+            and filter_by_quality(qual, quality_threshold)
         ):
             filtered_fastq[key] = (seq, qual)
+    return filtered_fastq
+
 
 # Writes the fastq file
-write_fastq(filtered_fastq)
+filtered_fastq = filter_fastq('bioinformatic_tool\example_data\example_fastq.fastq', quality_threshold=15, gc_bounds=50, length_bounds=500)
+
+write_fastq(filtered_fastq, "my_output.fastq")
