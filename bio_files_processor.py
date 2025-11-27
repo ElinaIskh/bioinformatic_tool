@@ -22,7 +22,7 @@ def convert_multiline_fasta_to_oneline(
     id = ""
     seq = ""
 
-    with open(input_fasta) as input_file, open(
+    with open(input_fasta, "r") as input_file, open(
         output_fasta, "w") as output_file:
         for line in input_file:
             line = line.strip()
@@ -55,7 +55,7 @@ def parse_blast_output(
     Returns str
     """
 
-    proteins = []
+    all_proteins = []
 
     with open(input_file, "r") as input:
         lines = input.readlines()
@@ -63,16 +63,16 @@ def parse_blast_output(
     for i in range(len(lines)):
         line = lines[i].strip()
         if line.startswith("Sequences producing significant alignments:"):
-            header_id = i + 2  #skips the header
-            if header_index < len(lines):
+            header_id = i + 3  #skips the header
+            if header_id < len(lines):
                 first_line = lines[header_id].strip()
                 protein_name = first_line.split("...")[0].strip()
 
         if protein_name:
             protein.append(protein_name)
 
-    proteins.sort()
+    all_proteins.sort()
 
     with open(output_file, "w") as output:
-        for protein in proteins:
+        for protein in all_proteins:
             output.write(f"{protein}\n")
