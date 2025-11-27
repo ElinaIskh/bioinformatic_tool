@@ -1,7 +1,10 @@
 from .modules.dna_rna_tools import (
     is_nucleic_acid, reverse, transcribe, complement, reverse_complement
     )
-from .modules.fastq_tools import count_gc, count_quality, read_fastq, write_fastq
+from .modules.fastq_tools import (
+    count_gc, count_quality, parse_bounds, filter_by_gc, filter_by_length,
+    filter_by_quality, read_fastq, write_fastq
+    )
 
 
 def run_dna_rna_tools(*args: str) -> "bool | str":
