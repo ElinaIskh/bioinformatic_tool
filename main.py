@@ -1,99 +1,112 @@
-from .modules.dna_rna_tools import (
-    is_nucleic_acid, reverse, transcribe, complement, reverse_complement
-    )
-from .modules.fastq_tools import (
-    count_gc, count_quality, parse_bounds, filter_by_gc, filter_by_length,
-    filter_by_quality, read_fastq, write_fastq
-    )
+from abc import ABC, abstractmethod
+from typing import Union
 
 
-def run_dna_rna_tools(*args: str) -> "bool | str":
+class BiologicalSequence(ABC):
     """
-    Takes 1 or more sequences, checks if is it nucleic acid and
-    does one of the tools: is_nucleic_acid, reverse, transcribe,
-    complement, reverse_complement.
-    This functions checks if there are at least 2 arguments, 
-    if the tool exists and if the sequence is nucleic acid.
-
-    Arguments:
-    sequences: list[str]
-    tool: str
-
-    Returns bool/str
-    Raises exception if:
-        Number of argumets is less then 2
-        Sequence is not an nucleic acid
-        Tool is unknown
+    Abstract base class for biological sequences.
+    
+    Provides a common interface for sequence length, indexing, 
+    string representation, and alphabet validation.
     """
 
-    if len(args) < 2:
-        raise ValueError(
-            "Write at least one sequence and one tool")
+    def __init__(self, seq: str):
+        self.seq = seq
 
-    *sequences, tool = args
+    def __len__(self) -> int:
+        return len(self.seq)
 
-    # Tools dictionary
-    tools = {
-        "is_nucleic_acid": is_nucleic_acid,
-        "transcribe": transcribe,
-        "reverse": reverse,
-        "complement": complement,
-        "reverse_complement": reverse_complement,
-    }
+    def __getitem__(self, index: Union[int, slice]) -> "BiologicalSequence":
+        return self.__class__(self.seq[index])
 
-    if tool not in tools:
-        raise ValueError("Unknown tool")
+    def __str__(self) -> str:
+        return self.seq
 
-    if tool != "is_nucleic_acid":
-        for seq in sequences:
-            if not is_nucleic_acid(seq):
-                raise ValueError("Incorrect sequence")
-
-    results = [tools[tool](seq) for seq in sequences]
-    if len(results) == 1:
-        return results[0]
-    return results
+    @abstractmethod
+    def is_valid(self) -> bool:
+        """
+        Checks if the sequence consists of valid characters for its type.
+        """
+        pass
 
 
-def filter_fastq(
-    input_fastq: str,
-    gc_bounds: "tuple | int | float" = (0, 100),
-    length_bounds: "tuple | int | float" = (0, 2**32),
-    quality_threshold: float = 0,
-    output_fastq: str = None
-) -> dict:
+class NucleicAcidSequence(BiologicalSequence):
     """
-    Filters reads in fastq file, according to a number of
-    guanine-cytosine bounds, length of a read and mean quality
-    of a read.
-
-    Arguments:
-    input_fastq: str
-    gc_bounds: tuple/int/float (default (0, 100))
-    length_bounds: tuple/int/float (default (0, 2**32))
-    quality_threshold: int/float (default 0)
-    output_fastq: str
-
-    Returns str
+    Represents nucleic acid sequences (DNA and RNA).
+    
+    Implements core operations like complementation and reversal
+    based on a specific complement map.
     """
 
-    seqs = read_fastq(input_fastq)
+    def __init__(self, seq: str):
+        super().__init__(seq)
 
-    min_gc, max_gc = parse_bounds(gc_bounds, "GC")
-    min_len, max_len = parse_bounds(length_bounds, "length")
+    def is_valid(self) -> bool:
+        """Verify if all characters belong to the defined nucleic acid alphabet."""
+        return set(self.seq.upper()) <= self.alphabet
 
-    filtered_fastq = {}
-    for key, (seq, qual) in seqs.items():
-        if (
-            filter_by_gc(seq, min_gc, max_gc)
-            and filter_by_length(seq, min_len, max_len)
-            and filter_by_quality(qual, quality_threshold)
-        ):
-            filtered_fastq[key] = (seq, qual)
-    return filtered_fastq
+    def complement(self) -> "NucleicAcidSequence":
+        """
+        Return the complement sequence using the class's complement map.
+        Raises NotImplementedError if the map is not defined.
+        """
+        if not hasattr(self, "complement_map"):
+            raise NotImplementedError(
+                "Method .compliment() is not known for this class")
+    
+        new_seq = self.seq.translate(self.complement_map)
+        return self.__class__(new_seq)
+
+    def reverse(self) -> "NucleicAcidSequence":
+        """Return the reversed sequence"""
+        return self.__class__(self.seq[::-1])
+
+    def reverse_complement(self) -> "NucleicAcidSequence":
+        """Return the reverse-complement of the sequence."""
+        return self.complement().reverse()
 
 
-# Writes the fastq file
-filtered_fastq = filter_fastq('bioinformatic_tool\example_data\example_fastq.fastq', quality_threshold=15, gc_bounds=50, length_bounds=500)
+class DNASequence(NucleicAcidSequence):
+    """Class for DNA sequences."""
 
-write_fastq(filtered_fastq, "my_output.fastq")
+    alphabet = {"A", "T", "G", "C", "a", "t", "g", "c"}
+    complement_map = str.maketrans("ATGCatgc", "TACGtacg")
+
+    def __init__(self, seq):
+        super().__init__(seq)
+
+    def transcribe(self) -> "RNASequence":
+        """Transcribe the DNA sequence into an RNA sequence."""
+        new_seq = self.seq.replace("T", "U").replace("t", "u")
+        return RNASequence(new_seq)
+
+
+class RNASequence(NucleicAcidSequence):
+    """Class for RNA sequences."""
+
+    alphabet = {"A", "U", "G", "C", "a", "u", "g", "c"}
+    complement_map = str.maketrans("AUGCaugc", "UACGuacg")
+
+    def __init__(self, seq):
+        super().__init__(seq)
+
+
+class AminoAcidSequence(BiologicalSequence):
+    """Class for Amino acid sequences."""
+
+    alphabet = set("ACDEFGHIKLMNPQRSTVWYacdefghiklmnpqrstvwy")
+
+    def __init__(self, seq):
+        super().__init__(seq)
+
+    def is_valid(self) -> bool:
+        """Verify if all characters belong to the standard amino acid alphabet."""
+        return set(self.seq) <= self.alphabet
+
+    def count_aminoacid(self, aminoacid: str) -> int:
+        """Count the occurrences of a specific amino acid in the sequence."""
+        return self.seq.count(aminoacid)
+
+
+
+
