@@ -17,87 +17,74 @@ Author: Elina Iskhakova, *Institute of Cytology, Saint-Petersburg, Russia*
 bioinformatic_tool/
 │
 ├── README.md
-├── main.py                      # Main script (entry point)
-├── bio_files_processor.py       # Fasta and BLAST file utilities
-└── modules/
-    ├── dna_rna_tools.py         # DNA/RNA sequence tools
-    └── fastq_tools.py           # FASTQ processing and quality control
+├── main.py                      # OOP Classes & FASTQ Filter (Core Logic)
+└── bio_files_processor.py       # Fasta and BLAST file utilities
 
 ```
 
-## DNA/RNA utilities  `run_dna_rna_tools`
+## Object-Oriented Sequence Manipulation
 
-This function applies various operations to nucleic acid sequences.
-`run_dna_rna_tools(seq1, seq2, ..., tool)`
+The tool provides a robust class hierarchy for handling biological data as objects rather than simple strings.
 
-**Arguments:**
+**Supported Classes:**
 
-- `seq1, seq2, ...` — one or more nucleotide sequences
-- `tool` — name of the operation to perform  
-    (`is_nucleic_acid`, `reverse`, `transcribe`, `complement`, `reverse_complement`)
+- `DNASequence`: Supports `complement()`, `reverse()`, `reverse_complement()`, and `transcribe()`.
+- `RNASequence`: Supports `complement()`, `reverse()`, and `reverse_complement()`
+- `AminoAcidSequence`: Supports `count_aminoacid(symbol)`.
 
-**Example:**
+**Key Capabilities:**
 
-```
->>> run_dna_rna_tools("AUGC", "reverse") 
-"CGUA"  
+- Validation: Automatically check if sequences match their biological alphabet.
+- Slicing: Slice objects (e.g., dna[1:5]) and receive a new object of the same class.
+- Polymorphism: Native handling of complementation rules without manual type checking.
 
->>> run_dna_rna_tools("ATGC", "reverse_complement")
-"GCAT"  
+Example:
+``` python
+from main import DNASequence
 
->>> run_dna_rna_tools("ATUGC", "is_nucleic_acid") 
-False
-```
-
-## Reading and writing FASTQ
-
-```
-from modules.fastq_tools import read_fastq, write_fastq
-
-seqs = read_fastq("input.fastq")
-write_fastq(seqs, "output.fastq")  # writes into 'filtered/' directory
+dna = DNASequence("ATGC")
+print(dna.reverse_complement())  # Returns a DNASequence object: GCAT
+rna = dna.transcribe()           # Returns an RNASequence object: AUGC
 ```
 
-Notes:
+## FASTQ Filtering (Biopython Integrated)
 
-- read_fastq(input_fastq: str) -> dict[str, tuple[str, str]] — reads a FASTQ file into a dictionary with keys as sequence IDs and values as (sequence, quality) tuples.
+Efficiently filter sequencing reads using the `Bio.SeqIO` engine. Filters are applied to GC content, read length, and mean Phred quality.
 
-- write_fastq(filtered_fastq: dict, output_fastq: str) -> str — writes sequences to a FASTQ file in a filtered/ directory. Does not overwrite existing files.
+Function: `filter_fastq`
 
 
-### FASTQ filtering  `filter_fastq`
-
-Filters reads by GC content, read length, and mean base quality.
-```
+``` python
 filter_fastq(
-    input_fastq,
-    gc_bounds=(0, 100),
-    length_bounds=(0, 2**32),
-    quality_threshold=0,
-    output_fastq
-)
+    input_fastq: str,
+    gc_bounds: Union[tuple, int, float] = (0, 100),
+    length_bounds: Union[tuple, int, float] = (0, 2**32),
+    quality_threshold: float = 0
+) -> List[SeqRecord]
 ```
 
 **Arguments:**
 
-- `input_fastq`: name of input fastq file
+- `input_fastq`: path to the input fastq file
 - `gc_bounds`: allowed GC content range (%)
 - `length_bounds`: allowed sequence length range
 - `quality_threshold`: minimum mean quality
-- `output_fastq`: name of output fastq file
 
 **Returns:** fastq file
 
 **Example:**
 
-```
->>> filter_fastq('example_fastq.fastq', gc_bounds=(40, 60), quality_threshold=30, 'out_fastq.fastq')
+```python 
+from main import filter_fastq, write_fastq
+
+records = filter_fastq("data.fastq", quality_threshold=30)
+write_fastq(records, "filtered_data.fastq")  # Saves to 'filtered/' directory
 ```
 
 ## Bio file processing — modules/bio_files_processor.py
 ### Converting multiline FASTA to oneline
 
-```
+``` python
 convert_multiline_fasta_to_oneline("input.fasta", "output.fasta")
 ```
 
@@ -109,34 +96,21 @@ Converts sequences in FASTA to one-line per sequence format.
 
 ### Parsing BLAST output
 
-```
+``` python
 parse_blast_output("blast_results.txt", "proteins_sorted.txt")
 ```
 
 Reads a BLAST output text file, extracts protein names, sorts them alphabetically, and writes them to output_file.
 
-## Modules overview
+---
 
-### `modules/dna_rna_tools.py`
+## Installation & Requirements
+This tool requires Python 3.8+ and the Biopython library.
+```bash
+pip install biopython
+```
 
-Contains:
-
-- `is_nucleic_acid(seq)` — checks if the input is a valid nucleic acid
-- `reverse(seq)` — returns the reversed sequence
-- `transcribe(seq)` — transcribes DNA to RNA 
-- `complement(seq)` — returns the complementary strand
-- `reverse_complement(seq)` — returns the reverse complement strand
-
-### `modules/fastq_tools.py`
-
-Contains:
-
-- `read_fastq(input_fastq)` — read FASTQ file into a dictionary
-- `write_fastq(filtered_fastq, output_fastq)` — write FASTQ dictionary to file
-- `count_gc(seq)` — calculates GC percentage
-- `count_quality(qual)` — calculates mean quality score
-- Filtering helpers: `filter_by_gc()`, `filter_by_length()`, `filter_by_quality()`
-- `parse_bounds()` — validate and parse numeric bounds
-
-
-
+Import the required classes or functions directly from main.py or bio_files_processor.py to integrate them into your pipeline.
+```python
+from main import DNASequence, filter_fastq
+```

@@ -9,8 +9,7 @@ from Bio.SeqUtils import gc_fraction
 class BiologicalSequence(ABC):
     """
     Abstract base class for biological sequences.
-    
-    Provides a common interface for sequence length, indexing, 
+    Provides a common interface for sequence length, indexing,
     string representation, and alphabet validation.
     """
 
@@ -37,16 +36,19 @@ class BiologicalSequence(ABC):
 class NucleicAcidSequence(BiologicalSequence):
     """
     Represents nucleic acid sequences (DNA and RNA).
-    
     Implements core operations like complementation and reversal
     based on a specific complement map.
     """
+    alphabet = set()
 
     def __init__(self, seq: str):
         super().__init__(seq)
 
     def is_valid(self) -> bool:
-        """Verify if all characters belong to the defined nucleic acid alphabet."""
+        """
+        Verify if all characters belong to the defined
+        nucleic acid alphabet.
+        """
         return set(self.seq.upper()) <= self.alphabet
 
     def complement(self) -> "NucleicAcidSequence":
@@ -56,8 +58,8 @@ class NucleicAcidSequence(BiologicalSequence):
         """
         if not hasattr(self, "complement_map"):
             raise NotImplementedError(
-                "Method .compliment() is not known for this class")
-    
+                "Method .complement() is not known for this class")
+
         new_seq = self.seq.translate(self.complement_map)
         return self.__class__(new_seq)
 
@@ -104,7 +106,10 @@ class AminoAcidSequence(BiologicalSequence):
         super().__init__(seq)
 
     def is_valid(self) -> bool:
-        """Verify if all characters belong to the standard amino acid alphabet."""
+        """
+        Verify if all characters belong to
+        the standard amino acid alphabet.
+        """
         return set(self.seq) <= self.alphabet
 
     def count_aminoacid(self, aminoacid: str) -> int:
@@ -121,14 +126,14 @@ def filter_fastq(
     """
     Filters reads from a FASTQ file, according to a number of
     guanine-cytosine bounds, length of a read and mean quality
-    of a read. 
+    of a read.
 
     Arguments:
     input_fastq: str
     gc_bounds: tuple/int/float (default (0, 100))
     length_bounds: tuple/int/float (default (0, 2**32))
     quality_threshold: int/float (default 0)
-    
+
     Returns a list of SeqRecord objects.
     """
     min_gc, max_gc = parse_bounds(gc_bounds, "GC")
@@ -142,13 +147,14 @@ def filter_fastq(
             and filter_by_quality(record, quality_threshold)
         ):
             filtered_fastq.append(record)
-    
+
     return filtered_fastq
 
 
-def parse_bounds(bounds, name = "parameter"):
+def parse_bounds(bounds, name="parameter"):
     """
-    Parses bounds (tuple/int/float) and returns (min, max). Paramenter: GC or length.
+    Parses bounds (tuple/int/float) and returns (min, max).
+    Paramenter: GC or length.
     Raises ValueError if bounds are invalid.
     """
     if isinstance(bounds, (int, float)):
@@ -161,7 +167,7 @@ def parse_bounds(bounds, name = "parameter"):
 
 def filter_by_gc(record, min_gc: float, max_gc: float) -> bool:
     """Checks if GC-content of the sequence is within the bounds."""
-    gc = gc_fraction(record.seq) * 100 
+    gc = gc_fraction(record.seq) * 100
     return min_gc <= gc <= max_gc
 
 
@@ -179,12 +185,12 @@ def filter_by_quality(record, threshold: float) -> bool:
 
 def write_fastq(records: List[SeqRecord], output_filename: str) -> None:
     """
-    Writes a list of SeqRecord objects to a FASTQ file in the 'filtered' directory.
+    Writes a list of SeqRecord objects to a FASTQ file
+    in the 'filtered' directory.
     """
     if not os.path.exists("filtered"):
         os.makedirs("filtered")
     output_path = os.path.join("filtered", output_filename)
-    
+
     count = SeqIO.write(records, output_path, "fastq")
     print(f"Successfully wrote {count} records to {output_path}")
-
