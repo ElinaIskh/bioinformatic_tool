@@ -1,5 +1,9 @@
+import os
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import Union, List
+from Bio import SeqIO
+from Bio.SeqRecord import SeqRecord
+from Bio.SeqUtils import gc_fraction
 
 
 class BiologicalSequence(ABC):
@@ -108,5 +112,79 @@ class AminoAcidSequence(BiologicalSequence):
         return self.seq.count(aminoacid)
 
 
+def filter_fastq(
+    input_fastq: str,
+    gc_bounds: Union[tuple, int, float] = (0, 100),
+    length_bounds: Union[tuple, int, float] = (0, 2**32),
+    quality_threshold: float = 0,
+) -> List[SeqRecord]:
+    """
+    Filters reads from a FASTQ file, according to a number of
+    guanine-cytosine bounds, length of a read and mean quality
+    of a read. 
 
+    Arguments:
+    input_fastq: str
+    gc_bounds: tuple/int/float (default (0, 100))
+    length_bounds: tuple/int/float (default (0, 2**32))
+    quality_threshold: int/float (default 0)
+    
+    Returns a list of SeqRecord objects.
+    """
+    min_gc, max_gc = parse_bounds(gc_bounds, "GC")
+    min_len, max_len = parse_bounds(length_bounds, "length")
+
+    filtered_fastq = []
+    for record in SeqIO.parse(input_fastq, "fastq"):
+        if (
+            filter_by_gc(record, min_gc, max_gc)
+            and filter_by_length(record, min_len, max_len)
+            and filter_by_quality(record, quality_threshold)
+        ):
+            filtered_fastq.append(record)
+    
+    return filtered_fastq
+
+
+def parse_bounds(bounds, name = "parameter"):
+    """
+    Parses bounds (tuple/int/float) and returns (min, max). Paramenter: GC or length.
+    Raises ValueError if bounds are invalid.
+    """
+    if isinstance(bounds, (int, float)):
+        return 0, bounds
+    elif isinstance(bounds, tuple) and len(bounds) == 2:
+        return bounds
+    else:
+        raise ValueError(f"Incorrect interval for {name}-bounds: {bounds}")
+
+
+def filter_by_gc(record, min_gc: float, max_gc: float) -> bool:
+    """Checks if GC-content of the sequence is within the bounds."""
+    gc = gc_fraction(record.seq) * 100 
+    return min_gc <= gc <= max_gc
+
+
+def filter_by_length(record, min_len: int, max_len: int) -> bool:
+    """Checks if sequence length is within the bounds."""
+    return min_len <= len(record.seq) <= max_len
+
+
+def filter_by_quality(record, threshold: float) -> bool:
+    """Checks if mean quality exceeds the threshold."""
+    qualities = record.letter_annotations["phred_quality"]
+    mean_qual = sum(qualities) / len(qualities)
+    return mean_qual >= threshold
+
+
+def write_fastq(records: List[SeqRecord], output_filename: str) -> None:
+    """
+    Writes a list of SeqRecord objects to a FASTQ file in the 'filtered' directory.
+    """
+    if not os.path.exists("filtered"):
+        os.makedirs("filtered")
+    output_path = os.path.join("filtered", output_filename)
+    
+    count = SeqIO.write(records, output_path, "fastq")
+    print(f"Successfully wrote {count} records to {output_path}")
 
