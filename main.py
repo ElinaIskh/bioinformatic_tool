@@ -1,6 +1,6 @@
 import os
 from abc import ABC, abstractmethod
-from typing import Union, List
+from typing import Union, List, Optional, Set, Dict
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqUtils import gc_fraction
@@ -13,7 +13,7 @@ class BiologicalSequence(ABC):
     string representation, and alphabet validation.
     """
 
-    def __init__(self, seq: str):
+    def __init__(self, seq: str) -> None:
         self.seq = seq
 
     def __len__(self) -> int:
@@ -39,7 +39,8 @@ class NucleicAcidSequence(BiologicalSequence):
     Implements core operations like complementation and reversal
     based on a specific complement map.
     """
-    alphabet = set()
+    alphabet: Set[str] = set()
+    complement_map: Dict[int, int] = {}
 
     def __init__(self, seq: str):
         super().__init__(seq)
@@ -78,7 +79,7 @@ class DNASequence(NucleicAcidSequence):
     alphabet = {"A", "T", "G", "C", "a", "t", "g", "c"}
     complement_map = str.maketrans("ATGCatgc", "TACGtacg")
 
-    def __init__(self, seq):
+    def __init__(self, seq: str) -> None:
         super().__init__(seq)
 
     def transcribe(self) -> "RNASequence":
@@ -151,7 +152,7 @@ def filter_fastq(
     return filtered_fastq
 
 
-def parse_bounds(bounds, name="parameter"):
+def parse_bounds(bounds: Union[tuple, int, float], name: str = "parameter"):
     """
     Parses bounds (tuple/int/float) and returns (min, max).
     Paramenter: GC or length.
