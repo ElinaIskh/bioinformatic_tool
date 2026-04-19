@@ -1,9 +1,14 @@
 import os
+import argparse
 from abc import ABC, abstractmethod
 from typing import Union, List, Optional, Set, Dict
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqUtils import gc_fraction
+from loguru import logger
+
+
+logger.add("tool_log.log", rotation="10 MB", level="INFO")
 
 
 class BiologicalSequence(ABC):
@@ -118,6 +123,39 @@ class AminoAcidSequence(BiologicalSequence):
         return self.seq.count(aminoacid)
 
 
+def parse_bounds(bounds: Union[tuple, int, float], name: str = "parameter"):
+    """
+    Parses bounds (tuple/int/float) and returns (min, max).
+    Paramenter: GC or length.
+    Raises ValueError if bounds are invalid.
+    """
+    if isinstance(bounds, (int, float)):
+        return 0, bounds
+    elif isinstance(bounds, tuple) and len(bounds) == 2:
+        return bounds
+    else:
+        logger.error(f"Invalid bounds format for {name}: {bounds}")
+        raise ValueError(f"Incorrect interval for {name}-bounds: {bounds}")
+
+
+def filter_by_gc(record, min_gc: float, max_gc: float) -> bool:
+    """Checks if GC-content of the sequence is within the bounds."""
+    gc = gc_fraction(record.seq) * 100
+    return min_gc <= gc <= max_gc
+
+
+def filter_by_length(record, min_len: int, max_len: int) -> bool:
+    """Checks if sequence length is within the bounds."""
+    return min_len <= len(record.seq) <= max_len
+
+
+def filter_by_quality(record, threshold: float) -> bool:
+    """Checks if mean quality exceeds the threshold."""
+    qualities = record.letter_annotations["phred_quality"]
+    mean_qual = sum(qualities) / len(qualities)
+    return mean_qual >= threshold
+
+
 def filter_fastq(
     input_fastq: str,
     gc_bounds: Union[tuple, int, float] = (0, 100),
@@ -141,47 +179,22 @@ def filter_fastq(
     min_len, max_len = parse_bounds(length_bounds, "length")
 
     filtered_fastq = []
-    for record in SeqIO.parse(input_fastq, "fastq"):
-        if (
-            filter_by_gc(record, min_gc, max_gc)
-            and filter_by_length(record, min_len, max_len)
-            and filter_by_quality(record, quality_threshold)
-        ):
-            filtered_fastq.append(record)
+    try:
+        for record in SeqIO.parse(input_fastq, "fastq"):
+            if (
+                filter_by_gc(record, min_gc, max_gc)
+                and filter_by_length(record, min_len, max_len)
+                and filter_by_quality(record, quality_threshold)
+            ):
+                filtered_fastq.append(record)
+
+        logger.info(
+            f"Filtered {input_fastq}: kept {len(filtered_fastq)} reads")
+    except Exception as e:
+        logger.error(f"Failed to process {input_fastq}: {e}")
+        raise
 
     return filtered_fastq
-
-
-def parse_bounds(bounds: Union[tuple, int, float], name: str = "parameter"):
-    """
-    Parses bounds (tuple/int/float) and returns (min, max).
-    Paramenter: GC or length.
-    Raises ValueError if bounds are invalid.
-    """
-    if isinstance(bounds, (int, float)):
-        return 0, bounds
-    elif isinstance(bounds, tuple) and len(bounds) == 2:
-        return bounds
-    else:
-        raise ValueError(f"Incorrect interval for {name}-bounds: {bounds}")
-
-
-def filter_by_gc(record, min_gc: float, max_gc: float) -> bool:
-    """Checks if GC-content of the sequence is within the bounds."""
-    gc = gc_fraction(record.seq) * 100
-    return min_gc <= gc <= max_gc
-
-
-def filter_by_length(record, min_len: int, max_len: int) -> bool:
-    """Checks if sequence length is within the bounds."""
-    return min_len <= len(record.seq) <= max_len
-
-
-def filter_by_quality(record, threshold: float) -> bool:
-    """Checks if mean quality exceeds the threshold."""
-    qualities = record.letter_annotations["phred_quality"]
-    mean_qual = sum(qualities) / len(qualities)
-    return mean_qual >= threshold
 
 
 def write_fastq(records: List[SeqRecord], output_filename: str) -> None:
@@ -194,4 +207,20 @@ def write_fastq(records: List[SeqRecord], output_filename: str) -> None:
     output_path = os.path.join("filtered", output_filename)
 
     count = SeqIO.write(records, output_path, "fastq")
-    print(f"Successfully wrote {count} records to {output_path}")
+    return output_path
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="FASTQ Filter Tool")
+    parser.add_argument("--input", required=True, help="Input FASTQ file")
+    parser.add_argument("--output", required=True, help="Output filename")
+    parser.add_argument("--min_gc", type=float, default=0)
+    parser.add_argument("--max_gc", type=float, default=100)
+    parser.add_argument("--min_len", type=int, default=0)
+    parser.add_argument("--quality", type=float, default=0)
+
+    args = parser.parse_args()
+
+    res = filter_fastq(args.input, (args.min_gc, args.max_gc),
+                       (args.min_len, 2**32), args.quality)
+    write_fastq(res, args.output)
