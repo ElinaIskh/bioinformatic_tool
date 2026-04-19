@@ -1,69 +1,169 @@
-from .modules.dna_rna_tools import (
-    is_nucleic_acid, reverse, transcribe, complement, reverse_complement
-    )
-from .modules.fastq_tools import (
-    count_gc, count_quality, parse_bounds, filter_by_gc, filter_by_length,
-    filter_by_quality, read_fastq, write_fastq
-    )
+import os
+import argparse
+from abc import ABC, abstractmethod
+from typing import Union, List, Optional, Set, Dict
+from Bio import SeqIO
+from Bio.SeqRecord import SeqRecord
+from Bio.SeqUtils import gc_fraction
+from loguru import logger
 
 
-def run_dna_rna_tools(*args: str) -> "bool | str":
+logger.add("tool_log.log", rotation="10 MB", level="INFO")
+
+
+class BiologicalSequence(ABC):
     """
-    Takes 1 or more sequences, checks if is it nucleic acid and
-    does one of the tools: is_nucleic_acid, reverse, transcribe,
-    complement, reverse_complement.
-    This functions checks if there are at least 2 arguments, 
-    if the tool exists and if the sequence is nucleic acid.
-
-    Arguments:
-    sequences: list[str]
-    tool: str
-
-    Returns bool/str
-    Raises exception if:
-        Number of argumets is less then 2
-        Sequence is not an nucleic acid
-        Tool is unknown
+    Abstract base class for biological sequences.
+    Provides a common interface for sequence length, indexing,
+    string representation, and alphabet validation.
     """
 
-    if len(args) < 2:
-        raise ValueError(
-            "Write at least one sequence and one tool")
+    def __init__(self, seq: str) -> None:
+        self.seq = seq
 
-    *sequences, tool = args
+    def __len__(self) -> int:
+        return len(self.seq)
 
-    # Tools dictionary
-    tools = {
-        "is_nucleic_acid": is_nucleic_acid,
-        "transcribe": transcribe,
-        "reverse": reverse,
-        "complement": complement,
-        "reverse_complement": reverse_complement,
-    }
+    def __getitem__(self, index: Union[int, slice]) -> "BiologicalSequence":
+        return self.__class__(self.seq[index])
 
-    if tool not in tools:
-        raise ValueError("Unknown tool")
+    def __str__(self) -> str:
+        return self.seq
 
-    if tool != "is_nucleic_acid":
-        for seq in sequences:
-            if not is_nucleic_acid(seq):
-                raise ValueError("Incorrect sequence")
+    @abstractmethod
+    def is_valid(self) -> bool:
+        """
+        Checks if the sequence consists of valid characters for its type.
+        """
+        pass
 
-    results = [tools[tool](seq) for seq in sequences]
-    if len(results) == 1:
-        return results[0]
-    return results
+
+class NucleicAcidSequence(BiologicalSequence):
+    """
+    Represents nucleic acid sequences (DNA and RNA).
+    Implements core operations like complementation and reversal
+    based on a specific complement map.
+    """
+    alphabet: Set[str] = set()
+    complement_map: Dict[int, int] = {}
+
+    def __init__(self, seq: str):
+        super().__init__(seq)
+
+    def is_valid(self) -> bool:
+        """
+        Verify if all characters belong to the defined
+        nucleic acid alphabet.
+        """
+        return set(self.seq.upper()) <= self.alphabet
+
+    def complement(self) -> "NucleicAcidSequence":
+        """
+        Return the complement sequence using the class's complement map.
+        Raises NotImplementedError if the map is not defined.
+        """
+        if not hasattr(self, "complement_map"):
+            raise NotImplementedError(
+                "Method .complement() is not known for this class")
+
+        new_seq = self.seq.translate(self.complement_map)
+        return self.__class__(new_seq)
+
+    def reverse(self) -> "NucleicAcidSequence":
+        """Return the reversed sequence"""
+        return self.__class__(self.seq[::-1])
+
+    def reverse_complement(self) -> "NucleicAcidSequence":
+        """Return the reverse-complement of the sequence."""
+        return self.complement().reverse()
+
+
+class DNASequence(NucleicAcidSequence):
+    """Class for DNA sequences."""
+
+    alphabet = {"A", "T", "G", "C", "a", "t", "g", "c"}
+    complement_map = str.maketrans("ATGCatgc", "TACGtacg")
+
+    def __init__(self, seq: str) -> None:
+        super().__init__(seq)
+
+    def transcribe(self) -> "RNASequence":
+        """Transcribe the DNA sequence into an RNA sequence."""
+        new_seq = self.seq.replace("T", "U").replace("t", "u")
+        return RNASequence(new_seq)
+
+
+class RNASequence(NucleicAcidSequence):
+    """Class for RNA sequences."""
+
+    alphabet = {"A", "U", "G", "C", "a", "u", "g", "c"}
+    complement_map = str.maketrans("AUGCaugc", "UACGuacg")
+
+    def __init__(self, seq):
+        super().__init__(seq)
+
+
+class AminoAcidSequence(BiologicalSequence):
+    """Class for Amino acid sequences."""
+
+    alphabet = set("ACDEFGHIKLMNPQRSTVWYacdefghiklmnpqrstvwy")
+
+    def __init__(self, seq):
+        super().__init__(seq)
+
+    def is_valid(self) -> bool:
+        """
+        Verify if all characters belong to
+        the standard amino acid alphabet.
+        """
+        return set(self.seq) <= self.alphabet
+
+    def count_aminoacid(self, aminoacid: str) -> int:
+        """Count the occurrences of a specific amino acid in the sequence."""
+        return self.seq.count(aminoacid)
+
+
+def parse_bounds(bounds: Union[tuple, int, float], name: str = "parameter"):
+    """
+    Parses bounds (tuple/int/float) and returns (min, max).
+    Paramenter: GC or length.
+    Raises ValueError if bounds are invalid.
+    """
+    if isinstance(bounds, (int, float)):
+        return 0, bounds
+    elif isinstance(bounds, tuple) and len(bounds) == 2:
+        return bounds
+    else:
+        logger.error(f"Invalid bounds format for {name}: {bounds}")
+        raise ValueError(f"Incorrect interval for {name}-bounds: {bounds}")
+
+
+def filter_by_gc(record, min_gc: float, max_gc: float) -> bool:
+    """Checks if GC-content of the sequence is within the bounds."""
+    gc = gc_fraction(record.seq) * 100
+    return min_gc <= gc <= max_gc
+
+
+def filter_by_length(record, min_len: int, max_len: int) -> bool:
+    """Checks if sequence length is within the bounds."""
+    return min_len <= len(record.seq) <= max_len
+
+
+def filter_by_quality(record, threshold: float) -> bool:
+    """Checks if mean quality exceeds the threshold."""
+    qualities = record.letter_annotations["phred_quality"]
+    mean_qual = sum(qualities) / len(qualities)
+    return mean_qual >= threshold
 
 
 def filter_fastq(
     input_fastq: str,
-    gc_bounds: "tuple | int | float" = (0, 100),
-    length_bounds: "tuple | int | float" = (0, 2**32),
+    gc_bounds: Union[tuple, int, float] = (0, 100),
+    length_bounds: Union[tuple, int, float] = (0, 2**32),
     quality_threshold: float = 0,
-    output_fastq: str = None
-) -> dict:
+) -> List[SeqRecord]:
     """
-    Filters reads in fastq file, according to a number of
+    Filters reads from a FASTQ file, according to a number of
     guanine-cytosine bounds, length of a read and mean quality
     of a read.
 
@@ -72,28 +172,55 @@ def filter_fastq(
     gc_bounds: tuple/int/float (default (0, 100))
     length_bounds: tuple/int/float (default (0, 2**32))
     quality_threshold: int/float (default 0)
-    output_fastq: str
 
-    Returns str
+    Returns a list of SeqRecord objects.
     """
-
-    seqs = read_fastq(input_fastq)
-
     min_gc, max_gc = parse_bounds(gc_bounds, "GC")
     min_len, max_len = parse_bounds(length_bounds, "length")
 
-    filtered_fastq = {}
-    for key, (seq, qual) in seqs.items():
-        if (
-            filter_by_gc(seq, min_gc, max_gc)
-            and filter_by_length(seq, min_len, max_len)
-            and filter_by_quality(qual, quality_threshold)
-        ):
-            filtered_fastq[key] = (seq, qual)
+    filtered_fastq = []
+    try:
+        for record in SeqIO.parse(input_fastq, "fastq"):
+            if (
+                filter_by_gc(record, min_gc, max_gc)
+                and filter_by_length(record, min_len, max_len)
+                and filter_by_quality(record, quality_threshold)
+            ):
+                filtered_fastq.append(record)
+
+        logger.info(
+            f"Filtered {input_fastq}: kept {len(filtered_fastq)} reads")
+    except Exception as e:
+        logger.error(f"Failed to process {input_fastq}: {e}")
+        raise
+
     return filtered_fastq
 
 
-# Writes the fastq file
-filtered_fastq = filter_fastq('bioinformatic_tool\example_data\example_fastq.fastq', quality_threshold=15, gc_bounds=50, length_bounds=500)
+def write_fastq(records: List[SeqRecord], output_filename: str) -> None:
+    """
+    Writes a list of SeqRecord objects to a FASTQ file
+    in the 'filtered' directory.
+    """
+    if not os.path.exists("filtered"):
+        os.makedirs("filtered")
+    output_path = os.path.join("filtered", output_filename)
 
-write_fastq(filtered_fastq, "my_output.fastq")
+    count = SeqIO.write(records, output_path, "fastq")
+    return output_path
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="FASTQ Filter Tool")
+    parser.add_argument("--input", required=True, help="Input FASTQ file")
+    parser.add_argument("--output", required=True, help="Output filename")
+    parser.add_argument("--min_gc", type=float, default=0)
+    parser.add_argument("--max_gc", type=float, default=100)
+    parser.add_argument("--min_len", type=int, default=0)
+    parser.add_argument("--quality", type=float, default=0)
+
+    args = parser.parse_args()
+
+    res = filter_fastq(args.input, (args.min_gc, args.max_gc),
+                       (args.min_len, 2**32), args.quality)
+    write_fastq(res, args.output)
